@@ -410,11 +410,15 @@
         const colorHex = { red: '#ff0000', blue: '#0000ff', green: '#00ff00', yellow: '#ffff00', purple: '#800080', orange: '#ff6600' };
         let selectedColor = null;
         let adminGame = 'color';
+        
+        // These are the persistent variables
         let excludedColor = { color: null, wheel: null };
-        let forceWin = { color: false, wheel: false };
-        let wheelSegments = ['Win $10', 'Lose', 'Bonus', 'Try Again', 'Jackpot', 'Nothing']; // Default
+        let forceWin = { color: false, wheel: null }; 
+        
+        // DEFAULT TO 10 SEGMENTS FOR EASIER TESTING
+        let wheelSegments = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']; 
         let isSpinning = false;
-        let adminWindow = null; // To keep track of the admin window
+        let adminWindow = null; 
 
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
@@ -477,27 +481,20 @@
                         const rolledColors = [];
 
                         if (forceWin.color) {
-                            // NEW "SUBTLE WIN" LOGIC
-                            // 1. Decide which one is the guaranteed win (0, 1, or 2)
+                            // SUBTLE WIN LOGIC
                             const winIndex = Math.floor(Math.random() * 3);
-                            
-                            // 2. Decide if we allow 'Jackpots' (Doubles/Triples). 
-                            // 85% of the time, we BAN duplicates to make it look "less obvious"
                             const blockDuplicates = Math.random() > 0.15; 
                             
-                            // Create a pool for the other dice (excluding the winner if we are blocking dupes)
                             let otherDicePool = availableColors;
                             if (blockDuplicates) {
                                 otherDicePool = availableColors.filter(c => c !== selectedColor);
                             }
-                            if (otherDicePool.length === 0) otherDicePool = availableColors; // Fallback
+                            if (otherDicePool.length === 0) otherDicePool = availableColors;
 
                             for (let i = 0; i < 3; i++) {
                                 if (i === winIndex) {
-                                    // This is the guaranteed win
                                     rolledColors.push(selectedColor);
                                 } else {
-                                    // This is a random filler (mostly likely NOT the selected color)
                                     rolledColors.push(otherDicePool[Math.floor(Math.random() * otherDicePool.length)]);
                                 }
                             }
@@ -562,7 +559,7 @@
                 ctx.moveTo(centerX, centerY);
                 ctx.arc(centerX, centerY, radius, startAngle, endAngle);
                 ctx.closePath();
-                ctx.fillStyle = colorHex[colors[index % colors.length]] || '#333'; // Cycle colors
+                ctx.fillStyle = colorHex[colors[index % colors.length]] || '#333';
                 ctx.fill();
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 2;
@@ -603,12 +600,58 @@
             const resultsDiv = document.getElementById('wheel-results');
             resultsDiv.innerHTML = '<h2>Spinning...</h2>';
 
-            let availableIndices = wheelSegments.map((_, i) => i).filter(i => i != excludedColor.wheel);
-            const winningIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+            let winningIndex;
 
+            // 1. DETERMINE WINNING INDEX
+            if (forceWin.wheel !== null && forceWin.wheel !== "") {
+                // FORCE LOGIC
+                winningIndex = parseInt(forceWin.wheel);
+                if (winningIndex >= wheelSegments.length) winningIndex = 0;
+            } else {
+                // RANDOM + EXCLUDE LOGIC
+                let availableIndices = wheelSegments.map((_, i) => i);
+                
+                // Strict exclude filter
+                if (excludedColor.wheel !== null && excludedColor.wheel !== "") {
+                    const exIdx = parseInt(excludedColor.wheel);
+                    availableIndices = availableIndices.filter(i => i !== exIdx);
+                }
+
+                // Failsafe
+                if (availableIndices.length === 0) availableIndices = wheelSegments.map((_, i) => i);
+                
+                winningIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+            }
+
+            // 2. CALCULATE MATH TO LAND ON INDEX
             const anglePerSegment = (2 * Math.PI) / wheelSegments.length;
-            const targetAngle = (winningIndex * anglePerSegment) + (Math.random() * anglePerSegment) - (anglePerSegment / 2);
-            const totalRotation = currentRotation + (Math.PI * 2 * 5) + targetAngle; // 5 full spins + target
+            
+            // The angle of the CENTER of the winning segment (relative to 0 rotation)
+            const winnerAngle = (winningIndex * anglePerSegment) + (anglePerSegment / 2);
+
+            // We want the wheel to stop such that:
+            // (currentRotation + delta + winnerAngle) % 2PI = 3PI/2 (270 degrees, Top)
+            // So: delta = (3PI/2) - winnerAngle - currentRotation
+            
+            const targetVisualAngle = (3 * Math.PI / 2); // 270 degrees
+            
+            // Calculate where the winner is RIGHT NOW with current rotation
+            const currentMod = currentRotation % (2 * Math.PI);
+            
+            // Calculate the delta needed to reach target from 0-based calculation
+            let targetBase = targetVisualAngle - winnerAngle; 
+            
+            // Subtract current rotation remainder to find distance needed
+            let delta = targetBase - currentMod;
+
+            // Normalize delta to be positive (so we always spin forward)
+            while (delta < 0) { delta += 2 * Math.PI; }
+            
+            // Add randomness within the segment (stay safe, 80% width)
+            const randomOffset = (Math.random() - 0.5) * (anglePerSegment * 0.8);
+
+            // 5 Full Spins + Delta + Randomness
+            const totalRotation = currentRotation + delta + (5 * 2 * Math.PI) + randomOffset;
 
             let startTime = null;
             const duration = 3000; // 3 seconds
@@ -617,7 +660,7 @@
                 if (!startTime) startTime = timestamp;
                 const elapsed = timestamp - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                const easeOut = 1 - Math.pow(1 - progress, 3); // Easing function
+                const easeOut = 1 - Math.pow(1 - progress, 3);
 
                 currentRotation = totalRotation * easeOut;
                 drawWheel();
@@ -635,13 +678,13 @@
             requestAnimationFrame(animateSpin);
         });
 
-        // Admin Modal Logic (Popup on Ctrl + Alt + H)
+        // Admin Modal Logic
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.altKey && e.key === 'h') {
                 e.preventDefault();
-                // Open admin in a new window
+                
                 if (!adminWindow || adminWindow.closed) {
-                    adminWindow = window.open('', 'adminWindow', 'width=600,height=500');
+                    adminWindow = window.open('', 'adminWindow', 'width=600,height=550');
                     adminWindow.document.write(`
                         <!DOCTYPE html>
                         <html lang="en">
@@ -650,80 +693,15 @@
                             <title>Admin Panel</title>
                             <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
                             <style>
-                                body { 
-                                    font-family: 'Orbitron', sans-serif; 
-                                    background: linear-gradient(135deg, #0f0f23, #1a1a2e);
-                                    color: #fff; 
-                                    padding: 20px; 
-                                    text-align: center;
-                                }
-                                .admin-container {
-                                    background: rgba(255, 255, 255, 0.1);
-                                    backdrop-filter: blur(10px);
-                                    border-radius: 20px;
-                                    padding: 30px;
-                                    border: 1px solid rgba(255, 255, 255, 0.2);
-                                    box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
-                                }
-                                h2 {
-                                    color: #00ffff;
-                                    text-shadow: 0 0 20px #00ffff;
-                                    margin-bottom: 20px;
-                                }
-                                label {
-                                    display: block;
-                                    margin-top: 15px;
-                                    margin-bottom: 5px;
-                                    color: #00ffff;
-                                    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
-                                    font-size: 0.9rem;
-                                }
-                                select, input[type="text"] {
-                                    background: rgba(0, 0, 0, 0.4);
-                                    border: 1px solid rgba(0, 255, 255, 0.3);
-                                    color: white;
-                                    padding: 10px;
-                                    border-radius: 10px;
-                                    font-family: 'Orbitron', sans-serif;
-                                    width: 100%;
-                                    box-sizing: border-box;
-                                    outline: none;
-                                }
-                                select option {
-                                    background: #1a1a2e;
-                                    color: #fff;
-                                }
-                                input[type="checkbox"] {
-                                    transform: scale(1.5);
-                                    margin-right: 10px;
-                                }
-                                button {
-                                    margin-top: 20px;
-                                    padding: 12px 25px;
-                                    font-family: 'Orbitron', sans-serif;
-                                    font-weight: bold;
-                                    color: white;
-                                    border: none;
-                                    border-radius: 15px;
-                                    cursor: pointer;
-                                    transition: all 0.3s ease;
-                                }
-                                #apply-settings {
-                                    background: linear-gradient(45deg, #00ff00, #008000);
-                                    box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-                                }
-                                #apply-settings:hover {
-                                    transform: scale(1.05);
-                                    box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
-                                }
-                                #reset-settings {
-                                    background: linear-gradient(45deg, #ff0000, #800000);
-                                    box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
-                                }
-                                #reset-settings:hover {
-                                    transform: scale(1.05);
-                                    box-shadow: 0 0 30px rgba(255, 0, 0, 0.6);
-                                }
+                                body { font-family: 'Orbitron', sans-serif; background: linear-gradient(135deg, #0f0f23, #1a1a2e); color: #fff; padding: 20px; text-align: center; }
+                                .admin-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 0 40px rgba(0, 255, 255, 0.3); }
+                                h2 { color: #00ffff; text-shadow: 0 0 20px #00ffff; margin-bottom: 20px; }
+                                label { display: block; margin-top: 15px; margin-bottom: 5px; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-size: 0.9rem; }
+                                select, input[type="text"] { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 255, 255, 0.3); color: white; padding: 10px; border-radius: 10px; font-family: 'Orbitron', sans-serif; width: 100%; box-sizing: border-box; outline: none; }
+                                select option { background: #1a1a2e; color: #fff; }
+                                input[type="checkbox"] { transform: scale(1.5); margin-right: 10px; }
+                                .status { margin-top: 10px; color: #00ff00; font-size: 0.8rem; height: 1.2em; transition: opacity 0.5s; opacity: 0; }
+                                button { margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 10px; cursor: pointer; font-family: 'Orbitron'; }
                             </style>
                         </head>
                         <body>
@@ -735,7 +713,7 @@
                                     <option value="wheel">Spin the Wheel</option>
                                 </select>
                                 <div id="color-controls">
-                                    <label>Exclude Color (won't appear):</label>
+                                    <label>Exclude Color:</label>
                                     <select id="exclude-color">
                                         <option value="">None</option>
                                         <option value="red">Red</option>
@@ -746,11 +724,11 @@
                                         <option value="orange">Orange</option>
                                     </select>
                                     <label style="display:flex; align-items:center; justify-content:center; margin-top:15px;">
-                                        <input type="checkbox" id="force-win"> Force Win for Selected Bet
+                                        <input type="checkbox" id="force-win-color"> Force Win for Selected Bet
                                     </label>
                                 </div>
                                 <div id="wheel-controls" style="display: none;">
-                                    <label>Exclude Segment (won't appear):</label>
+                                    <label>Exclude Segment:</label>
                                     <select id="exclude-segment">
                                         <option value="">None</option>
                                         <option value="0">Segment 1</option>
@@ -764,59 +742,75 @@
                                         <option value="8">Segment 9</option>
                                         <option value="9">Segment 10</option>
                                     </select>
-                                    <label style="display:flex; align-items:center; justify-content:center; margin-top:15px; opacity: 0.5;">
-                                        <input type="checkbox" id="force-win-wheel" disabled> Force Win (disabled for wheel)
-                                    </label>
+                                    
+                                    <label style="margin-top: 20px;">Force Result (Persistent):</label>
+                                    <select id="force-result-wheel">
+                                        <option value="">Random (Normal)</option>
+                                        <option value="0">Segment 1</option>
+                                        <option value="1">Segment 2</option>
+                                        <option value="2">Segment 3</option>
+                                        <option value="3">Segment 4</option>
+                                        <option value="4">Segment 5</option>
+                                        <option value="5">Segment 6</option>
+                                        <option value="6">Segment 7</option>
+                                        <option value="7">Segment 8</option>
+                                        <option value="8">Segment 9</option>
+                                        <option value="9">Segment 10</option>
+                                    </select>
                                 </div>
-                                <div style="display: flex; justify-content: space-around;">
-                                    <button id="apply-settings">Apply</button>
-                                    <button id="reset-settings">Reset</button>
-                                </div>
+                                <div class="status" id="status-msg">Updated!</div>
+                                <button id="reset-btn">Reset All</button>
                             </div>
                         </body>
                         </html>
                     `);
                     adminWindow.document.close();
 
-                    // Add event listeners to the new window
                     adminWindow.onload = () => {
-                        const adminGameSelect = adminWindow.document.getElementById('admin-game');
-                        const colorControls = adminWindow.document.getElementById('color-controls');
-                        const wheelControls = adminWindow.document.getElementById('wheel-controls');
-                        const applyBtn = adminWindow.document.getElementById('apply-settings');
-                        const resetBtn = adminWindow.document.getElementById('reset-settings');
+                        const doc = adminWindow.document;
+                        const els = {
+                            game: doc.getElementById('admin-game'),
+                            color: doc.getElementById('color-controls'),
+                            wheel: doc.getElementById('wheel-controls'),
+                            exColor: doc.getElementById('exclude-color'),
+                            forceColor: doc.getElementById('force-win-color'),
+                            exWheel: doc.getElementById('exclude-segment'),
+                            forceWheel: doc.getElementById('force-result-wheel'),
+                            status: doc.getElementById('status-msg'),
+                            reset: doc.getElementById('reset-btn')
+                        };
 
-                        adminGameSelect.addEventListener('change', () => {
-                            const game = adminGameSelect.value;
-                            colorControls.style.display = game === 'color' ? 'block' : 'none';
-                            wheelControls.style.display = game === 'wheel' ? 'block' : 'none';
-                        });
+                        els.exColor.value = excludedColor.color || "";
+                        els.forceColor.checked = forceWin.color;
+                        els.exWheel.value = excludedColor.wheel || "";
+                        els.forceWheel.value = forceWin.wheel || "";
+                        els.game.value = adminGame; 
 
-                        applyBtn.addEventListener('click', () => {
-                            const game = adminGameSelect.value;
-                            if (game === 'color') {
-                                excludedColor.color = adminWindow.document.getElementById('exclude-color').value || null;
-                                forceWin.color = adminWindow.document.getElementById('force-win').checked;
-                            } else {
-                                excludedColor.wheel = adminWindow.document.getElementById('exclude-segment').value || null;
-                            }
-                            // Feedback that it worked
-                            const originalText = applyBtn.innerText;
-                            applyBtn.innerText = "Active!";
-                            setTimeout(() => applyBtn.innerText = originalText, 1000);
-                        });
+                        const toggle = () => {
+                            els.color.style.display = els.game.value === 'color' ? 'block' : 'none';
+                            els.wheel.style.display = els.game.value === 'wheel' ? 'block' : 'none';
+                        };
+                        els.game.addEventListener('change', toggle);
+                        toggle();
 
-                        resetBtn.addEventListener('click', () => {
-                            const game = adminGameSelect.value;
-                            if (game === 'color') {
-                                excludedColor.color = null;
-                                forceWin.color = false;
-                                adminWindow.document.getElementById('exclude-color').value = '';
-                                adminWindow.document.getElementById('force-win').checked = false;
-                            } else {
-                                excludedColor.wheel = null;
-                                adminWindow.document.getElementById('exclude-segment').value = '';
-                            }
+                        const flashStatus = () => {
+                            els.status.style.opacity = 1;
+                            setTimeout(() => els.status.style.opacity = 0, 1000);
+                        };
+
+                        els.exColor.addEventListener('change', () => { excludedColor.color = els.exColor.value || null; flashStatus(); });
+                        els.forceColor.addEventListener('change', () => { forceWin.color = els.forceColor.checked; flashStatus(); });
+                        els.exWheel.addEventListener('change', () => { excludedColor.wheel = els.exWheel.value || null; flashStatus(); });
+                        els.forceWheel.addEventListener('change', () => { forceWin.wheel = els.forceWheel.value || null; flashStatus(); });
+
+                        els.reset.addEventListener('click', () => {
+                            excludedColor = { color: null, wheel: null };
+                            forceWin = { color: false, wheel: null };
+                            els.exColor.value = "";
+                            els.forceColor.checked = false;
+                            els.exWheel.value = "";
+                            els.forceWheel.value = "";
+                            flashStatus();
                         });
                     };
                 } else {
