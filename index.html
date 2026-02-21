@@ -199,28 +199,31 @@
             text-shadow: 0 0 20px #ffff00;
             margin: 20px 0;
         }
-        /* Wheel Styles */
+        /* IMPROVED Wheel Styles */
         #wheel-container {
             position: relative;
             margin: 20px auto;
-            width: 300px;
-            height: 300px;
+            width: 100%;
+            max-width: 500px; /* Bigger Wheel */
         }
         #wheel-canvas {
+            width: 100%;
+            height: auto;
             border-radius: 50%;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
         }
         #wheel-pointer {
             position: absolute;
-            top: -10px;
+            top: -15px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-top: 20px solid #ffff00;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #ffff00;
             filter: drop-shadow(0 0 10px #ffff00);
+            z-index: 10;
         }
         /* Coin Toss Styles */
         .coin-options {
@@ -257,7 +260,6 @@
             height: 100%;
             position: relative;
             transform-style: preserve-3d;
-            /* CHANGED: This controls the coin flip duration (4s) */
             transition: transform 4s cubic-bezier(0.1, 0.7, 0.1, 1);
         }
         .side {
@@ -350,20 +352,23 @@
             color: #00ffff;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
         }
-        .modal-content input {
-            width: calc(50% - 15px);
-            padding: 10px;
-            margin: 5px;
+        /* IMPROVED Textarea for Customization */
+        .modal-content textarea {
+            width: 100%;
+            height: 120px;
+            padding: 15px;
             background: rgba(0, 0, 0, 0.4);
             color: white;
             border: 1px solid rgba(0, 255, 255, 0.3);
             border-radius: 10px;
             font-family: 'Orbitron', sans-serif;
-            font-size: 0.9rem;
+            font-size: 1rem;
             transition: all 0.3s ease;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+            resize: vertical;
+            box-sizing: border-box;
         }
-        .modal-content input:focus {
+        .modal-content textarea:focus {
             outline: none;
             border-color: #00ffff;
             box-shadow: 0 0 15px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.1);
@@ -387,7 +392,6 @@
             transform: scale(1.05);
             box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
         }
-        /* Admin Panel as Footer */
         .admin-footer {
             margin-top: auto;
             padding: 10px;
@@ -428,7 +432,7 @@
             <p>Customize and spin for prizes!</p>
             <button id="customize-btn">Customize Wheel</button>
             <div id="wheel-container">
-                <canvas id="wheel-canvas" width="300" height="300"></canvas>
+                <canvas id="wheel-canvas" width="500" height="500"></canvas>
                 <div id="wheel-pointer"></div>
             </div>
             <button id="spin-btn">Spin Wheel</button>
@@ -455,18 +459,9 @@
         <div id="customize-modal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2>Customize Wheel Segments</h2>
-                <label>Enter up to 10 segments:</label>
-                <input type="text" id="segment1" placeholder="Segment 1">
-                <input type="text" id="segment2" placeholder="Segment 2">
-                <input type="text" id="segment3" placeholder="Segment 3">
-                <input type="text" id="segment4" placeholder="Segment 4">
-                <input type="text" id="segment5" placeholder="Segment 5">
-                <input type="text" id="segment6" placeholder="Segment 6">
-                <input type="text" id="segment7" placeholder="Segment 7">
-                <input type="text" id="segment8" placeholder="Segment 8">
-                <input type="text" id="segment9" placeholder="Segment 9">
-                <input type="text" id="segment10" placeholder="Segment 10">
+                <h2>Customize Wheel</h2>
+                <label>Enter segments (separated by commas):</label>
+                <textarea id="wheel-segments-input" placeholder="e.g. Prize 1, Prize 2, Try Again"></textarea>
                 <button id="update-wheel">Update Wheel</button>
             </div>
         </div>
@@ -491,12 +486,14 @@
         let wheelSegments = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']; 
         
         // Admin Persistent Variables
-        let excludedColor = { color: null, wheel: null };
+        let excludedColor = { color: null };
         let forceWin = { color: false, wheel: null };
         
-        // COIN VARIABLES ADDED HERE
-        let excludedCoin = null; // 'heads' or 'tails'
-        let forceWinCoin = false; // true or false
+        // UPDATED: Allow multiple wheel exclusions
+        let excludedWheel = []; 
+        
+        let excludedCoin = null; 
+        let forceWinCoin = false; 
         
         let adminWindow = null; 
 
@@ -547,7 +544,6 @@
                         diceElements.push(diceDiv);
                     }
 
-                    // Reverted to 3000ms
                     setTimeout(() => {
                         diceElements.forEach(dice => dice.classList.remove('rolling'));
                         let availableColors = colors.filter(c => c !== excludedColor.color);
@@ -586,7 +582,11 @@
         const customizeBtn = document.getElementById('customize-btn');
         const closeBtn = document.querySelector('.close');
 
-        customizeBtn.addEventListener('click', () => modal.style.display = 'flex');
+        // Populate textarea when opening
+        customizeBtn.addEventListener('click', () => {
+            document.getElementById('wheel-segments-input').value = wheelSegments.join(', ');
+            modal.style.display = 'flex';
+        });
         closeBtn.addEventListener('click', () => modal.style.display = 'none');
         window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
 
@@ -594,7 +594,7 @@
         const ctx = canvas.getContext('2d');
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        const radius = 140;
+        const radius = 240; // Increased radius
         let currentRotation = 0;
 
         function drawWheel() {
@@ -603,6 +603,8 @@
             wheelSegments.forEach((segment, index) => {
                 const startAngle = index * anglePerSegment + currentRotation;
                 const endAngle = (index + 1) * anglePerSegment + currentRotation;
+                
+                // Draw slice
                 ctx.beginPath();
                 ctx.moveTo(centerX, centerY);
                 ctx.arc(centerX, centerY, radius, startAngle, endAngle);
@@ -610,27 +612,47 @@
                 ctx.fillStyle = colorHex[colors[index % colors.length]] || '#333';
                 ctx.fill();
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 3;
                 ctx.stroke();
-                const textAngle = startAngle + anglePerSegment / 2;
-                const textX = centerX + Math.cos(textAngle) * (radius - 40);
-                const textY = centerY + Math.sin(textAngle) * (radius - 40);
-                ctx.fillStyle = '#000';
-                ctx.font = 'bold 12px Orbitron';
-                ctx.textAlign = 'center';
-                ctx.fillText(segment, textX, textY);
+                
+                // IMPROVED TEXT DRAWING (Radial & Outline)
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                // Rotate to center of the slice
+                ctx.rotate(startAngle + anglePerSegment / 2);
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#ffffff";
+                ctx.strokeStyle = "#000000"; // Black outline for visibility
+                ctx.lineWidth = 4;
+                // Dynamically adjust font size slightly if text is very long, but keep it bold
+                ctx.font = 'bold 18px Orbitron'; 
+                
+                // Draw text outward towards edge
+                const textX = radius - 20;
+                ctx.strokeText(segment.toUpperCase(), textX, 0); // Outline
+                ctx.fillText(segment.toUpperCase(), textX, 0);   // White Fill
+                ctx.restore();
             });
         }
         drawWheel();
 
+        // UPDATED Customize parsing
         document.getElementById('update-wheel').addEventListener('click', () => {
-            const newSegments = [];
-            for (let i = 1; i <= 10; i++) {
-                const val = document.getElementById('segment' + i).value.trim();
-                if (val) newSegments.push(val);
+            const val = document.getElementById('wheel-segments-input').value;
+            // Split by comma, trim whitespace, remove empties
+            const newSegments = val.split(',').map(s => s.trim()).filter(s => s !== "");
+            
+            if (newSegments.length < 2) { 
+                alert('Please enter at least 2 segments separated by commas.'); 
+                return; 
             }
-            if (newSegments.length < 2) { alert('Please enter at least 2 segments.'); return; }
             wheelSegments = newSegments;
+            
+            // Clear exclusions when wheel updates to prevent indexing bugs
+            excludedWheel = [];
+            forceWin.wheel = null;
+            
             drawWheel();
             modal.style.display = 'none';
         });
@@ -647,10 +669,12 @@
                 if (winningIndex >= wheelSegments.length) winningIndex = 0;
             } else {
                 let availableIndices = wheelSegments.map((_, i) => i);
-                if (excludedColor.wheel !== null && excludedColor.wheel !== "") {
-                    const exIdx = parseInt(excludedColor.wheel);
-                    availableIndices = availableIndices.filter(i => i !== exIdx);
+                
+                // Exclude MULTIPLE selected indices
+                if (excludedWheel.length > 0) {
+                    availableIndices = availableIndices.filter(i => !excludedWheel.includes(i));
                 }
+                
                 if (availableIndices.length === 0) availableIndices = wheelSegments.map((_, i) => i);
                 winningIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
             }
@@ -664,11 +688,9 @@
             while (delta < 0) { delta += 2 * Math.PI; }
             const randomOffset = (Math.random() - 0.5) * (anglePerSegment * 0.8);
             
-            // Reverted to 5 spins
             const totalRotation = currentRotation + delta + (5 * 2 * Math.PI) + randomOffset;
 
             let startTime = null;
-            // Reverted to 3000ms
             const duration = 3000; 
             
             function animateSpin(timestamp) {
@@ -710,20 +732,15 @@
 
             let result = null;
 
-            // --- ADMIN LOGIC APPLIED HERE ---
             if (forceWinCoin && selectedCoinSide) {
-                // 1. Force Win (takes precedence)
                 result = selectedCoinSide;
             } else if (excludedCoin) {
-                // 2. Exclude Logic
                 if (excludedCoin === 'heads') result = 'tails';
                 if (excludedCoin === 'tails') result = 'heads';
             } else {
-                // 3. Random Logic
                 result = Math.random() < 0.5 ? 'heads' : 'tails';
             }
 
-            // Longer spin duration (2520 = 7 spins)
             const baseSpins = 2520; 
             
             let targetDegrees = 0;
@@ -745,7 +762,6 @@
             coinRotation = nextRotation;
             coin.style.transform = `rotateY(${coinRotation}deg)`;
 
-            // 4000ms (4s) for Coin Toss suspense
             setTimeout(() => {
                 isFlipping = false;
                 resultDiv.innerHTML = `<h2>${result.toUpperCase()}!</h2>`;
@@ -757,13 +773,29 @@
             }, 4000); 
         });
 
-        // --- ADMIN PANEL LOGIC ---
+        // --- UPDATED ADMIN PANEL LOGIC ---
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.altKey && e.key === 'h') {
                 e.preventDefault();
                 
                 if (!adminWindow || adminWindow.closed) {
-                    adminWindow = window.open('', 'adminWindow', 'width=600,height=600');
+                    
+                    // Generate dynamic HTML strings for the Wheel based on current segments
+                    let wheelExcludeHTML = '<div class="checkbox-grid" id="exclude-segment-container">';
+                    wheelSegments.forEach((seg, i) => {
+                        const isChecked = excludedWheel.includes(i) ? 'checked' : '';
+                        wheelExcludeHTML += `<label><input type="checkbox" value="${i}" class="ex-wheel-cb" ${isChecked}> ${seg}</label>`;
+                    });
+                    wheelExcludeHTML += '</div>';
+
+                    let wheelForceHTML = '<select id="force-result-wheel"><option value="">Random (Normal)</option>';
+                    wheelSegments.forEach((seg, i) => {
+                        const isSelected = (forceWin.wheel == i) ? 'selected' : '';
+                        wheelForceHTML += `<option value="${i}" ${isSelected}>${seg}</option>`;
+                    });
+                    wheelForceHTML += '</select>';
+
+                    adminWindow = window.open('', 'adminWindow', 'width=650,height=650');
                     adminWindow.document.write(`
                         <!DOCTYPE html>
                         <html lang="en">
@@ -775,18 +807,23 @@
                                 body { font-family: 'Orbitron', sans-serif; background: linear-gradient(135deg, #0f0f23, #1a1a2e); color: #fff; padding: 20px; text-align: center; }
                                 .admin-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 0 40px rgba(0, 255, 255, 0.3); }
                                 h2 { color: #00ffff; text-shadow: 0 0 20px #00ffff; margin-bottom: 20px; }
-                                label { display: block; margin-top: 15px; margin-bottom: 5px; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-size: 0.9rem; }
+                                label { display: block; margin-top: 15px; margin-bottom: 5px; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-size: 0.9rem; font-weight: bold;}
                                 select, input[type="text"] { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 255, 255, 0.3); color: white; padding: 10px; border-radius: 10px; font-family: 'Orbitron', sans-serif; width: 100%; box-sizing: border-box; outline: none; }
                                 select option { background: #1a1a2e; color: #fff; }
                                 input[type="checkbox"] { transform: scale(1.5); margin-right: 10px; }
                                 .status { margin-top: 10px; color: #00ff00; font-size: 0.8rem; height: 1.2em; transition: opacity 0.5s; opacity: 0; }
-                                button { margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 10px; cursor: pointer; font-family: 'Orbitron'; }
+                                button { margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: bold;}
+                                
+                                /* Grid for multiple checkboxes */
+                                .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid rgba(0,255,255,0.2); max-height: 200px; overflow-y: auto; }
+                                .checkbox-grid label { display: flex; align-items: center; justify-content: flex-start; margin: 0; font-size: 0.85rem; color: #fff; text-shadow: none; font-weight: normal; }
+                                .checkbox-grid input { width: auto; margin-right: 10px; transform: scale(1.2); }
                             </style>
                         </head>
                         <body>
                             <div class="admin-container">
                                 <h2>Admin Panel</h2>
-                                <label>Select Game:</label>
+                                <label>Select Game Control:</label>
                                 <select id="admin-game">
                                     <option value="color">Color Game</option>
                                     <option value="wheel">Spin the Wheel</option>
@@ -804,40 +841,17 @@
                                         <option value="purple">Purple</option>
                                         <option value="orange">Orange</option>
                                     </select>
-                                    <label style="display:flex; align-items:center; justify-content:center; margin-top:15px;">
+                                    <label style="display:flex; align-items:center; justify-content:center; margin-top:20px; color:#fff;">
                                         <input type="checkbox" id="force-win-color"> Force Win for Selected Bet
                                     </label>
                                 </div>
 
                                 <div id="wheel-controls" style="display: none;">
-                                    <label>Exclude Segment:</label>
-                                    <select id="exclude-segment">
-                                        <option value="">None</option>
-                                        <option value="0">Segment 1</option>
-                                        <option value="1">Segment 2</option>
-                                        <option value="2">Segment 3</option>
-                                        <option value="3">Segment 4</option>
-                                        <option value="4">Segment 5</option>
-                                        <option value="5">Segment 6</option>
-                                        <option value="6">Segment 7</option>
-                                        <option value="7">Segment 8</option>
-                                        <option value="8">Segment 9</option>
-                                        <option value="9">Segment 10</option>
-                                    </select>
+                                    <label>Exclude Segments (Check all that apply):</label>
+                                    ${wheelExcludeHTML}
+                                    
                                     <label style="margin-top: 20px;">Force Result (Persistent):</label>
-                                    <select id="force-result-wheel">
-                                        <option value="">Random (Normal)</option>
-                                        <option value="0">Segment 1</option>
-                                        <option value="1">Segment 2</option>
-                                        <option value="2">Segment 3</option>
-                                        <option value="3">Segment 4</option>
-                                        <option value="4">Segment 5</option>
-                                        <option value="5">Segment 6</option>
-                                        <option value="6">Segment 7</option>
-                                        <option value="7">Segment 8</option>
-                                        <option value="8">Segment 9</option>
-                                        <option value="9">Segment 10</option>
-                                    </select>
+                                    ${wheelForceHTML}
                                 </div>
 
                                 <div id="coin-controls" style="display: none;">
@@ -847,13 +861,13 @@
                                         <option value="heads">Heads</option>
                                         <option value="tails">Tails</option>
                                     </select>
-                                    <label style="display:flex; align-items:center; justify-content:center; margin-top:15px;">
+                                    <label style="display:flex; align-items:center; justify-content:center; margin-top:20px; color:#fff;">
                                         <input type="checkbox" id="force-win-coin"> Force Win for Selected Bet
                                     </label>
                                 </div>
 
                                 <div class="status" id="status-msg">Updated!</div>
-                                <button id="reset-btn">Reset All</button>
+                                <button id="reset-btn">Reset All Values</button>
                             </div>
                         </body>
                         </html>
@@ -872,8 +886,8 @@
                             exColor: doc.getElementById('exclude-color'),
                             forceColor: doc.getElementById('force-win-color'),
                             
-                            // Wheel
-                            exWheel: doc.getElementById('exclude-segment'),
+                            // Wheel (dynamic elements)
+                            exWheelCBs: doc.querySelectorAll('.ex-wheel-cb'),
                             forceWheel: doc.getElementById('force-result-wheel'),
                             
                             // Coin
@@ -884,16 +898,11 @@
                             reset: doc.getElementById('reset-btn')
                         };
 
-                        // Initialize values
+                        // Sync inputs with current vars
                         els.exColor.value = excludedColor.color || "";
                         els.forceColor.checked = forceWin.color;
-                        els.exWheel.value = excludedColor.wheel || "";
-                        els.forceWheel.value = forceWin.wheel || "";
-                        
-                        // Initialize Coin Values
                         els.exCoin.value = excludedCoin || "";
                         els.forceCoin.checked = forceWinCoin;
-
                         els.game.value = adminGame; 
 
                         const toggle = () => {
@@ -912,29 +921,39 @@
                             setTimeout(() => els.status.style.opacity = 0, 1000);
                         };
 
-                        // Listeners
+                        // Color Listeners
                         els.exColor.addEventListener('change', () => { excludedColor.color = els.exColor.value || null; flashStatus(); });
                         els.forceColor.addEventListener('change', () => { forceWin.color = els.forceColor.checked; flashStatus(); });
                         
-                        els.exWheel.addEventListener('change', () => { excludedColor.wheel = els.exWheel.value || null; flashStatus(); });
+                        // Wheel Listeners (Multiple Exclusion)
+                        els.exWheelCBs.forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                // Rebuild array based on what's currently checked
+                                excludedWheel = Array.from(els.exWheelCBs)
+                                    .filter(checkbox => checkbox.checked)
+                                    .map(checkbox => parseInt(checkbox.value));
+                                flashStatus();
+                            });
+                        });
                         els.forceWheel.addEventListener('change', () => { forceWin.wheel = els.forceWheel.value || null; flashStatus(); });
                         
                         // Coin Listeners
                         els.exCoin.addEventListener('change', () => { excludedCoin = els.exCoin.value || null; flashStatus(); });
                         els.forceCoin.addEventListener('change', () => { forceWinCoin = els.forceCoin.checked; flashStatus(); });
 
+                        // Reset
                         els.reset.addEventListener('click', () => {
-                            excludedColor = { color: null, wheel: null };
-                            forceWin = { color: false, wheel: null };
-                            
+                            excludedColor.color = null;
+                            forceWin.color = false;
+                            excludedWheel = [];
+                            forceWin.wheel = null;
                             excludedCoin = null;
                             forceWinCoin = false;
 
                             els.exColor.value = "";
                             els.forceColor.checked = false;
-                            els.exWheel.value = "";
+                            els.exWheelCBs.forEach(cb => cb.checked = false);
                             els.forceWheel.value = "";
-                            
                             els.exCoin.value = "";
                             els.forceCoin.checked = false;
                             
