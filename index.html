@@ -199,12 +199,12 @@
             text-shadow: 0 0 20px #ffff00;
             margin: 20px 0;
         }
-        /* IMPROVED Wheel Styles */
+        /* Wheel Styles */
         #wheel-container {
             position: relative;
             margin: 20px auto;
             width: 100%;
-            max-width: 500px; /* Bigger Wheel */
+            max-width: 500px;
         }
         #wheel-canvas {
             width: 100%;
@@ -352,7 +352,6 @@
             color: #00ffff;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
         }
-        /* IMPROVED Textarea for Customization */
         .modal-content textarea {
             width: 100%;
             height: 120px;
@@ -488,10 +487,7 @@
         // Admin Persistent Variables
         let excludedColor = { color: null };
         let forceWin = { color: false, wheel: null };
-        
-        // UPDATED: Allow multiple wheel exclusions
         let excludedWheel = []; 
-        
         let excludedCoin = null; 
         let forceWinCoin = false; 
         
@@ -582,7 +578,6 @@
         const customizeBtn = document.getElementById('customize-btn');
         const closeBtn = document.querySelector('.close');
 
-        // Populate textarea when opening
         customizeBtn.addEventListener('click', () => {
             document.getElementById('wheel-segments-input').value = wheelSegments.join(', ');
             modal.style.display = 'flex';
@@ -594,7 +589,7 @@
         const ctx = canvas.getContext('2d');
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        const radius = 240; // Increased radius
+        const radius = 240; 
         let currentRotation = 0;
 
         function drawWheel() {
@@ -604,7 +599,6 @@
                 const startAngle = index * anglePerSegment + currentRotation;
                 const endAngle = (index + 1) * anglePerSegment + currentRotation;
                 
-                // Draw slice
                 ctx.beginPath();
                 ctx.moveTo(centerX, centerY);
                 ctx.arc(centerX, centerY, radius, startAngle, endAngle);
@@ -615,32 +609,26 @@
                 ctx.lineWidth = 3;
                 ctx.stroke();
                 
-                // IMPROVED TEXT DRAWING (Radial & Outline)
                 ctx.save();
                 ctx.translate(centerX, centerY);
-                // Rotate to center of the slice
                 ctx.rotate(startAngle + anglePerSegment / 2);
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
                 ctx.fillStyle = "#ffffff";
-                ctx.strokeStyle = "#000000"; // Black outline for visibility
+                ctx.strokeStyle = "#000000"; 
                 ctx.lineWidth = 4;
-                // Dynamically adjust font size slightly if text is very long, but keep it bold
                 ctx.font = 'bold 18px Orbitron'; 
                 
-                // Draw text outward towards edge
                 const textX = radius - 20;
-                ctx.strokeText(segment.toUpperCase(), textX, 0); // Outline
-                ctx.fillText(segment.toUpperCase(), textX, 0);   // White Fill
+                ctx.strokeText(segment.toUpperCase(), textX, 0); 
+                ctx.fillText(segment.toUpperCase(), textX, 0);   
                 ctx.restore();
             });
         }
         drawWheel();
 
-        // UPDATED Customize parsing
         document.getElementById('update-wheel').addEventListener('click', () => {
             const val = document.getElementById('wheel-segments-input').value;
-            // Split by comma, trim whitespace, remove empties
             const newSegments = val.split(',').map(s => s.trim()).filter(s => s !== "");
             
             if (newSegments.length < 2) { 
@@ -649,7 +637,6 @@
             }
             wheelSegments = newSegments;
             
-            // Clear exclusions when wheel updates to prevent indexing bugs
             excludedWheel = [];
             forceWin.wheel = null;
             
@@ -669,12 +656,9 @@
                 if (winningIndex >= wheelSegments.length) winningIndex = 0;
             } else {
                 let availableIndices = wheelSegments.map((_, i) => i);
-                
-                // Exclude MULTIPLE selected indices
                 if (excludedWheel.length > 0) {
                     availableIndices = availableIndices.filter(i => !excludedWheel.includes(i));
                 }
-                
                 if (availableIndices.length === 0) availableIndices = wheelSegments.map((_, i) => i);
                 winningIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
             }
@@ -773,14 +757,79 @@
             }, 4000); 
         });
 
-        // --- UPDATED ADMIN PANEL LOGIC ---
+        // --- NEW GLOBAL KEYBINDS LOGIC ---
+        document.addEventListener('keydown', (e) => {
+            // Do not trigger hotkeys if the user is typing in the textarea or input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            let stateChanged = false;
+
+            // COLOR EXCLUDE HOTKEYS (1 to 6)
+            const colorMap = { '1': 'red', '2': 'blue', '3': 'green', '4': 'yellow', '5': 'purple', '6': 'orange' };
+            if (colorMap[e.key]) {
+                const toggledColor = colorMap[e.key];
+                if (excludedColor.color === toggledColor) {
+                    excludedColor.color = null; // Toggle off if already selected
+                } else {
+                    excludedColor.color = toggledColor; // Set to new color
+                }
+                stateChanged = true;
+            }
+
+            // FORCE WIN HOTKEY (F)
+            if (e.key.toLowerCase() === 'f') {
+                forceWin.color = !forceWin.color;
+                stateChanged = true;
+            }
+
+            // RESET ALL HOTKEY (X)
+            if (e.key.toLowerCase() === 'x') {
+                excludedColor.color = null;
+                forceWin.color = false;
+                excludedWheel = [];
+                forceWin.wheel = null;
+                excludedCoin = null;
+                forceWinCoin = false;
+                stateChanged = true;
+            }
+
+            // Sync with Admin UI if it is open
+            if (stateChanged && adminWindow && !adminWindow.closed) {
+                const doc = adminWindow.document;
+                
+                // Update Color Game UI
+                if (doc.getElementById('exclude-color')) {
+                    doc.getElementById('exclude-color').value = excludedColor.color || "";
+                    doc.getElementById('force-win-color').checked = forceWin.color;
+                }
+                
+                // Update the rest if X was pressed
+                if (e.key.toLowerCase() === 'x') {
+                    if (doc.querySelectorAll('.ex-wheel-cb')) {
+                        doc.querySelectorAll('.ex-wheel-cb').forEach(cb => cb.checked = false);
+                    }
+                    if (doc.getElementById('force-result-wheel')) doc.getElementById('force-result-wheel').value = "";
+                    if (doc.getElementById('exclude-coin')) doc.getElementById('exclude-coin').value = "";
+                    if (doc.getElementById('force-win-coin')) doc.getElementById('force-win-coin').checked = false;
+                }
+
+                // Show the "Updated!" flash text
+                const statusEl = doc.getElementById('status-msg');
+                if (statusEl) {
+                    statusEl.style.opacity = 1;
+                    setTimeout(() => statusEl.style.opacity = 0, 1000);
+                }
+            }
+        });
+
+
+        // --- ADMIN PANEL WINDOW LOGIC ---
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.altKey && e.key === 'h') {
                 e.preventDefault();
                 
                 if (!adminWindow || adminWindow.closed) {
                     
-                    // Generate dynamic HTML strings for the Wheel based on current segments
                     let wheelExcludeHTML = '<div class="checkbox-grid" id="exclude-segment-container">';
                     wheelSegments.forEach((seg, i) => {
                         const isChecked = excludedWheel.includes(i) ? 'checked' : '';
@@ -831,18 +880,18 @@
                                 </select>
                                 
                                 <div id="color-controls">
-                                    <label>Exclude Color:</label>
+                                    <label>Exclude Color (Hotkeys: 1-6):</label>
                                     <select id="exclude-color">
                                         <option value="">None</option>
-                                        <option value="red">Red</option>
-                                        <option value="blue">Blue</option>
-                                        <option value="green">Green</option>
-                                        <option value="yellow">Yellow</option>
-                                        <option value="purple">Purple</option>
-                                        <option value="orange">Orange</option>
+                                        <option value="red">Red (1)</option>
+                                        <option value="blue">Blue (2)</option>
+                                        <option value="green">Green (3)</option>
+                                        <option value="yellow">Yellow (4)</option>
+                                        <option value="purple">Purple (5)</option>
+                                        <option value="orange">Orange (6)</option>
                                     </select>
                                     <label style="display:flex; align-items:center; justify-content:center; margin-top:20px; color:#fff;">
-                                        <input type="checkbox" id="force-win-color"> Force Win for Selected Bet
+                                        <input type="checkbox" id="force-win-color"> Force Win for Selected Bet (Hotkey: F)
                                     </label>
                                 </div>
 
@@ -867,7 +916,7 @@
                                 </div>
 
                                 <div class="status" id="status-msg">Updated!</div>
-                                <button id="reset-btn">Reset All Values</button>
+                                <button id="reset-btn">Reset All Values (Hotkey: X)</button>
                             </div>
                         </body>
                         </html>
@@ -882,15 +931,12 @@
                             wheel: doc.getElementById('wheel-controls'),
                             coin: doc.getElementById('coin-controls'),
                             
-                            // Color
                             exColor: doc.getElementById('exclude-color'),
                             forceColor: doc.getElementById('force-win-color'),
                             
-                            // Wheel (dynamic elements)
                             exWheelCBs: doc.querySelectorAll('.ex-wheel-cb'),
                             forceWheel: doc.getElementById('force-result-wheel'),
                             
-                            // Coin
                             exCoin: doc.getElementById('exclude-coin'),
                             forceCoin: doc.getElementById('force-win-coin'),
                             
@@ -898,7 +944,6 @@
                             reset: doc.getElementById('reset-btn')
                         };
 
-                        // Sync inputs with current vars
                         els.exColor.value = excludedColor.color || "";
                         els.forceColor.checked = forceWin.color;
                         els.exCoin.value = excludedCoin || "";
@@ -921,14 +966,11 @@
                             setTimeout(() => els.status.style.opacity = 0, 1000);
                         };
 
-                        // Color Listeners
                         els.exColor.addEventListener('change', () => { excludedColor.color = els.exColor.value || null; flashStatus(); });
                         els.forceColor.addEventListener('change', () => { forceWin.color = els.forceColor.checked; flashStatus(); });
                         
-                        // Wheel Listeners (Multiple Exclusion)
                         els.exWheelCBs.forEach(cb => {
                             cb.addEventListener('change', () => {
-                                // Rebuild array based on what's currently checked
                                 excludedWheel = Array.from(els.exWheelCBs)
                                     .filter(checkbox => checkbox.checked)
                                     .map(checkbox => parseInt(checkbox.value));
@@ -937,11 +979,9 @@
                         });
                         els.forceWheel.addEventListener('change', () => { forceWin.wheel = els.forceWheel.value || null; flashStatus(); });
                         
-                        // Coin Listeners
                         els.exCoin.addEventListener('change', () => { excludedCoin = els.exCoin.value || null; flashStatus(); });
                         els.forceCoin.addEventListener('change', () => { forceWinCoin = els.forceCoin.checked; flashStatus(); });
 
-                        // Reset
                         els.reset.addEventListener('click', () => {
                             excludedColor.color = null;
                             forceWin.color = false;
