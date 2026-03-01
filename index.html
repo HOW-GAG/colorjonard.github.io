@@ -351,7 +351,21 @@
             font-size: 1rem;
             color: #00ffff;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            text-align: left;
         }
+        .modal-content select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.4);
+            color: white;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            outline: none;
+        }
+        .modal-content select option { background: #1a1a2e; color: #fff; }
         .modal-content textarea {
             width: 100%;
             height: 120px;
@@ -459,8 +473,15 @@
             <div class="modal-content">
                 <span class="close">&times;</span>
                 <h2>Customize Wheel</h2>
+                
+                <label>Wheel Theme:</label>
+                <select id="wheel-theme-select">
+                    <option value="rainbow">Rainbow Colors</option>
+                    <option value="lightdark">Light & Dark</option>
+                </select>
+
                 <label>Enter segments (separated by commas):</label>
-                <textarea id="wheel-segments-input" placeholder="e.g. Prize 1, Prize 2, Try Again"></textarea>
+                <textarea id="wheel-segments-input" placeholder="e.g. Light 1, Dark 1, Light 2, Dark 2"></textarea>
                 <button id="update-wheel">Update Wheel</button>
             </div>
         </div>
@@ -472,7 +493,8 @@
 
     <script>
         const colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
-        const colorHex = { red: '#ff0000', blue: '#0000ff', green: '#00ff00', yellow: '#ffff00', purple: '#800080', orange: '#ff6600' };
+        const rainbowHex = ['#ff0000', '#0000ff', '#00ff00', '#ffff00', '#800080', '#ff6600'];
+        const lightDarkHex = ['#ffffff', '#2a2a35']; // White and Dark Grey
         
         // Game State
         let selectedColor = null;
@@ -483,11 +505,13 @@
         
         // Wheel Data
         let wheelSegments = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']; 
+        let wheelTheme = 'rainbow'; // 'rainbow' or 'lightdark'
         
         // Admin Persistent Variables
         let excludedColor = { color: null };
         let forceWin = { color: false, wheel: null };
         let excludedWheel = []; 
+        let excludeWheelThemeColor = null; // 'light' or 'dark'
         let excludedCoin = null; 
         let forceWinCoin = false; 
         
@@ -580,6 +604,7 @@
 
         customizeBtn.addEventListener('click', () => {
             document.getElementById('wheel-segments-input').value = wheelSegments.join(', ');
+            document.getElementById('wheel-theme-select').value = wheelTheme;
             modal.style.display = 'flex';
         });
         closeBtn.addEventListener('click', () => modal.style.display = 'none');
@@ -599,28 +624,46 @@
                 const startAngle = index * anglePerSegment + currentRotation;
                 const endAngle = (index + 1) * anglePerSegment + currentRotation;
                 
+                // Set Colors based on Theme
+                let bgColor, textColor, strokeColor, doTextStroke;
+                if (wheelTheme === 'lightdark') {
+                    bgColor = lightDarkHex[index % 2];
+                    textColor = (index % 2 === 0) ? '#000000' : '#ffffff'; // Black text on white, white on dark
+                    strokeColor = '#555'; // Darker border between slices
+                    doTextStroke = false; // No text outline needed for light/dark
+                } else {
+                    bgColor = rainbowHex[index % rainbowHex.length];
+                    textColor = '#ffffff';
+                    strokeColor = '#ffffff';
+                    doTextStroke = true;
+                }
+
+                // Draw Slice
                 ctx.beginPath();
                 ctx.moveTo(centerX, centerY);
                 ctx.arc(centerX, centerY, radius, startAngle, endAngle);
                 ctx.closePath();
-                ctx.fillStyle = colorHex[colors[index % colors.length]] || '#333';
+                ctx.fillStyle = bgColor;
                 ctx.fill();
-                ctx.strokeStyle = '#fff';
+                ctx.strokeStyle = strokeColor;
                 ctx.lineWidth = 3;
                 ctx.stroke();
                 
+                // Draw Text
                 ctx.save();
                 ctx.translate(centerX, centerY);
                 ctx.rotate(startAngle + anglePerSegment / 2);
                 ctx.textAlign = "right";
                 ctx.textBaseline = "middle";
-                ctx.fillStyle = "#ffffff";
-                ctx.strokeStyle = "#000000"; 
-                ctx.lineWidth = 4;
+                ctx.fillStyle = textColor;
                 ctx.font = 'bold 18px Orbitron'; 
                 
                 const textX = radius - 20;
-                ctx.strokeText(segment.toUpperCase(), textX, 0); 
+                if (doTextStroke) {
+                    ctx.strokeStyle = "#000000"; 
+                    ctx.lineWidth = 4;
+                    ctx.strokeText(segment.toUpperCase(), textX, 0); 
+                }
                 ctx.fillText(segment.toUpperCase(), textX, 0);   
                 ctx.restore();
             });
@@ -636,9 +679,12 @@
                 return; 
             }
             wheelSegments = newSegments;
+            wheelTheme = document.getElementById('wheel-theme-select').value;
             
+            // Reset exclusions when updated to prevent bugs
             excludedWheel = [];
             forceWin.wheel = null;
+            excludeWheelThemeColor = null;
             
             drawWheel();
             modal.style.display = 'none';
@@ -656,9 +702,23 @@
                 if (winningIndex >= wheelSegments.length) winningIndex = 0;
             } else {
                 let availableIndices = wheelSegments.map((_, i) => i);
+                
+                // 1. Specific Checkbox Exclusions
                 if (excludedWheel.length > 0) {
                     availableIndices = availableIndices.filter(i => !excludedWheel.includes(i));
                 }
+
+                // 2. Light/Dark Theme Exclusions
+                if (wheelTheme === 'lightdark' && excludeWheelThemeColor) {
+                    availableIndices = availableIndices.filter(i => {
+                        const isLight = (i % 2 === 0);
+                        if (excludeWheelThemeColor === 'light') return !isLight; // Keep Dark
+                        if (excludeWheelThemeColor === 'dark') return isLight;   // Keep Light
+                        return true;
+                    });
+                }
+
+                // Failsafe
                 if (availableIndices.length === 0) availableIndices = wheelSegments.map((_, i) => i);
                 winningIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
             }
@@ -757,10 +817,10 @@
             }, 4000); 
         });
 
-        // --- NEW GLOBAL KEYBINDS LOGIC ---
+        // --- GLOBAL KEYBINDS LOGIC ---
         document.addEventListener('keydown', (e) => {
-            // Do not trigger hotkeys if the user is typing in the textarea or input
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            // Ignore hotkeys if typing in inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
             let stateChanged = false;
 
@@ -769,16 +829,26 @@
             if (colorMap[e.key]) {
                 const toggledColor = colorMap[e.key];
                 if (excludedColor.color === toggledColor) {
-                    excludedColor.color = null; // Toggle off if already selected
+                    excludedColor.color = null; 
                 } else {
-                    excludedColor.color = toggledColor; // Set to new color
+                    excludedColor.color = toggledColor; 
                 }
                 stateChanged = true;
             }
 
-            // FORCE WIN HOTKEY (F)
+            // COLOR FORCE WIN HOTKEY (F)
             if (e.key.toLowerCase() === 'f') {
                 forceWin.color = !forceWin.color;
+                stateChanged = true;
+            }
+
+            // WHEEL LIGHT/DARK EXCLUDE HOTKEYS (L and D)
+            if (e.key.toLowerCase() === '1') {
+                excludeWheelThemeColor = (excludeWheelThemeColor === 'light') ? null : 'light';
+                stateChanged = true;
+            }
+            if (e.key.toLowerCase() === '2') {
+                excludeWheelThemeColor = (excludeWheelThemeColor === 'dark') ? null : 'dark';
                 stateChanged = true;
             }
 
@@ -788,6 +858,7 @@
                 forceWin.color = false;
                 excludedWheel = [];
                 forceWin.wheel = null;
+                excludeWheelThemeColor = null;
                 excludedCoin = null;
                 forceWinCoin = false;
                 stateChanged = true;
@@ -797,23 +868,22 @@
             if (stateChanged && adminWindow && !adminWindow.closed) {
                 const doc = adminWindow.document;
                 
-                // Update Color Game UI
                 if (doc.getElementById('exclude-color')) {
                     doc.getElementById('exclude-color').value = excludedColor.color || "";
                     doc.getElementById('force-win-color').checked = forceWin.color;
                 }
                 
-                // Update the rest if X was pressed
+                if (doc.getElementById('exclude-theme-color')) {
+                    doc.getElementById('exclude-theme-color').value = excludeWheelThemeColor || "";
+                }
+
                 if (e.key.toLowerCase() === 'x') {
-                    if (doc.querySelectorAll('.ex-wheel-cb')) {
-                        doc.querySelectorAll('.ex-wheel-cb').forEach(cb => cb.checked = false);
-                    }
+                    if (doc.querySelectorAll('.ex-wheel-cb')) doc.querySelectorAll('.ex-wheel-cb').forEach(cb => cb.checked = false);
                     if (doc.getElementById('force-result-wheel')) doc.getElementById('force-result-wheel').value = "";
                     if (doc.getElementById('exclude-coin')) doc.getElementById('exclude-coin').value = "";
                     if (doc.getElementById('force-win-coin')) doc.getElementById('force-win-coin').checked = false;
                 }
 
-                // Show the "Updated!" flash text
                 const statusEl = doc.getElementById('status-msg');
                 if (statusEl) {
                     statusEl.style.opacity = 1;
@@ -844,7 +914,7 @@
                     });
                     wheelForceHTML += '</select>';
 
-                    adminWindow = window.open('', 'adminWindow', 'width=650,height=650');
+                    adminWindow = window.open('', 'adminWindow', 'width=650,height=700');
                     adminWindow.document.write(`
                         <!DOCTYPE html>
                         <html lang="en">
@@ -856,23 +926,22 @@
                                 body { font-family: 'Orbitron', sans-serif; background: linear-gradient(135deg, #0f0f23, #1a1a2e); color: #fff; padding: 20px; text-align: center; }
                                 .admin-container { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 0 40px rgba(0, 255, 255, 0.3); }
                                 h2 { color: #00ffff; text-shadow: 0 0 20px #00ffff; margin-bottom: 20px; }
-                                label { display: block; margin-top: 15px; margin-bottom: 5px; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-size: 0.9rem; font-weight: bold;}
+                                label { display: block; margin-top: 15px; margin-bottom: 5px; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); font-size: 0.9rem; font-weight: bold; text-align:left;}
                                 select, input[type="text"] { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 255, 255, 0.3); color: white; padding: 10px; border-radius: 10px; font-family: 'Orbitron', sans-serif; width: 100%; box-sizing: border-box; outline: none; }
                                 select option { background: #1a1a2e; color: #fff; }
                                 input[type="checkbox"] { transform: scale(1.5); margin-right: 10px; }
                                 .status { margin-top: 10px; color: #00ff00; font-size: 0.8rem; height: 1.2em; transition: opacity 0.5s; opacity: 0; }
                                 button { margin-top: 20px; padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: bold;}
-                                
-                                /* Grid for multiple checkboxes */
-                                .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid rgba(0,255,255,0.2); max-height: 200px; overflow-y: auto; }
+                                .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid rgba(0,255,255,0.2); max-height: 150px; overflow-y: auto; margin-bottom: 10px;}
                                 .checkbox-grid label { display: flex; align-items: center; justify-content: flex-start; margin: 0; font-size: 0.85rem; color: #fff; text-shadow: none; font-weight: normal; }
                                 .checkbox-grid input { width: auto; margin-right: 10px; transform: scale(1.2); }
+                                .hotkey-note { display: inline-block; background: #ff0080; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 5px; }
                             </style>
                         </head>
                         <body>
                             <div class="admin-container">
                                 <h2>Admin Panel</h2>
-                                <label>Select Game Control:</label>
+                                <label style="text-align:center;">Select Game Control:</label>
                                 <select id="admin-game">
                                     <option value="color">Color Game</option>
                                     <option value="wheel">Spin the Wheel</option>
@@ -880,26 +949,33 @@
                                 </select>
                                 
                                 <div id="color-controls">
-                                    <label>Exclude Color (Hotkeys: 1-6):</label>
+                                    <label>Exclude Color: <span class="hotkey-note">Keys 1-6</span></label>
                                     <select id="exclude-color">
                                         <option value="">None</option>
-                                        <option value="red">Red (1)</option>
-                                        <option value="blue">Blue (2)</option>
-                                        <option value="green">Green (3)</option>
-                                        <option value="yellow">Yellow (4)</option>
-                                        <option value="purple">Purple (5)</option>
-                                        <option value="orange">Orange (6)</option>
+                                        <option value="red">Red</option>
+                                        <option value="blue">Blue</option>
+                                        <option value="green">Green</option>
+                                        <option value="yellow">Yellow</option>
+                                        <option value="purple">Purple</option>
+                                        <option value="orange">Orange</option>
                                     </select>
                                     <label style="display:flex; align-items:center; justify-content:center; margin-top:20px; color:#fff;">
-                                        <input type="checkbox" id="force-win-color"> Force Win for Selected Bet (Hotkey: F)
+                                        <input type="checkbox" id="force-win-color"> Force Win for Selected Bet <span class="hotkey-note">Key F</span>
                                     </label>
                                 </div>
 
                                 <div id="wheel-controls" style="display: none;">
-                                    <label>Exclude Segments (Check all that apply):</label>
+                                    <label>Exclude Specific Segments:</label>
                                     ${wheelExcludeHTML}
                                     
-                                    <label style="margin-top: 20px;">Force Result (Persistent):</label>
+                                    <label>Exclude by Theme (Light/Dark): <span class="hotkey-note">Keys 1 / 2</span></label>
+                                    <select id="exclude-theme-color">
+                                        <option value="">None</option>
+                                        <option value="light">Exclude Light (Force Dark)</option>
+                                        <option value="dark">Exclude Dark (Force Light)</option>
+                                    </select>
+
+                                    <label style="margin-top: 15px;">Force Specific Result:</label>
                                     ${wheelForceHTML}
                                 </div>
 
@@ -916,7 +992,7 @@
                                 </div>
 
                                 <div class="status" id="status-msg">Updated!</div>
-                                <button id="reset-btn">Reset All Values (Hotkey: X)</button>
+                                <button id="reset-btn">Reset All Hacks <span class="hotkey-note">Key X</span></button>
                             </div>
                         </body>
                         </html>
@@ -935,6 +1011,7 @@
                             forceColor: doc.getElementById('force-win-color'),
                             
                             exWheelCBs: doc.querySelectorAll('.ex-wheel-cb'),
+                            exThemeColor: doc.getElementById('exclude-theme-color'),
                             forceWheel: doc.getElementById('force-result-wheel'),
                             
                             exCoin: doc.getElementById('exclude-coin'),
@@ -944,8 +1021,12 @@
                             reset: doc.getElementById('reset-btn')
                         };
 
+                        // Sync inputs with current vars
                         els.exColor.value = excludedColor.color || "";
                         els.forceColor.checked = forceWin.color;
+                        
+                        els.exThemeColor.value = excludeWheelThemeColor || "";
+
                         els.exCoin.value = excludedCoin || "";
                         els.forceCoin.checked = forceWinCoin;
                         els.game.value = adminGame; 
@@ -966,6 +1047,7 @@
                             setTimeout(() => els.status.style.opacity = 0, 1000);
                         };
 
+                        // Listeners
                         els.exColor.addEventListener('change', () => { excludedColor.color = els.exColor.value || null; flashStatus(); });
                         els.forceColor.addEventListener('change', () => { forceWin.color = els.forceColor.checked; flashStatus(); });
                         
@@ -977,6 +1059,7 @@
                                 flashStatus();
                             });
                         });
+                        els.exThemeColor.addEventListener('change', () => { excludeWheelThemeColor = els.exThemeColor.value || null; flashStatus(); });
                         els.forceWheel.addEventListener('change', () => { forceWin.wheel = els.forceWheel.value || null; flashStatus(); });
                         
                         els.exCoin.addEventListener('change', () => { excludedCoin = els.exCoin.value || null; flashStatus(); });
@@ -985,15 +1068,21 @@
                         els.reset.addEventListener('click', () => {
                             excludedColor.color = null;
                             forceWin.color = false;
+                            
                             excludedWheel = [];
                             forceWin.wheel = null;
+                            excludeWheelThemeColor = null;
+                            
                             excludedCoin = null;
                             forceWinCoin = false;
 
                             els.exColor.value = "";
                             els.forceColor.checked = false;
+                            
                             els.exWheelCBs.forEach(cb => cb.checked = false);
                             els.forceWheel.value = "";
+                            els.exThemeColor.value = "";
+                            
                             els.exCoin.value = "";
                             els.forceCoin.checked = false;
                             
